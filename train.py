@@ -69,12 +69,6 @@ def train(source_train_loader, target_train_loader, model, criterion, optimizer,
 			target_label = convert_batch_label(target_label)
 		source_data, source_label, target_data, target_label = convert_tensor(source_data, source_label, target_data, target_label, device='cuda')
 		source_feature, target_feature, source_cls, target_cls = model(source_data, target_data)
-		
-		# normalize target_feature and transform it to the same size with source_feature
-		#target_feature = target_feature.view(k, source_feature.size(0), -1)
-		#target_feature = torch.mean(target_feature, 0)
-
-		target_feature = target_feature[:source_feature.size(0)]
 		optimizer.zero_grad()
 		mmd_loss = mmd_rbf_noaccelerate(source_feature, target_feature)
 		softmax_loss = criterion(source_cls, source_label)
@@ -97,7 +91,7 @@ def train(source_train_loader, target_train_loader, model, criterion, optimizer,
 	return losses, mmdlosses, softmaxloss, train_acc
 
 
-def train_ada(source_train_loader, target_train_loader, model, criterion, center_loss, optimizer, optimizer_centloss, epoch, gamma=0.5, k=1):
+def train_center(source_train_loader, target_train_loader, model, criterion, center_loss, optimizer, optimizer_centloss, epoch, gamma=0.5, k=1):
 	'''
 	:param source_train_loader:
 	:param target_train_loader:
@@ -117,7 +111,6 @@ def train_ada(source_train_loader, target_train_loader, model, criterion, center
 	centerlosses_source = 0  # init source center loss
 	centerlosses_target = 0  # init target center loss
 	mmdlosses = 0  # init mmdlosses
-	l2losses = 0
 	train_acc = 0  # init train_acc
 	iter_source = iter(source_train_loader)
 	iter_target = iter(target_train_loader)
@@ -146,16 +139,14 @@ def train_ada(source_train_loader, target_train_loader, model, criterion, center
 		softmax_loss = criterion(source_cls, source_label)
 		centerloss_source = center_loss(source_label, source_feature)
 		centerloss_target = center_loss(target_pseu[:source_label.size(0)], target_feature[:source_feature.size(0)])
-		l2loss = consistency_loss(sharpen(F.softmax(target_cls)), k=k)
 		correct = acc_cal(source_cls, source_label)
 		
-		loss = softmax_loss + 0.1 * gamma * (centerloss_source + centerloss_target) + 10 * l2loss
+		loss = softmax_loss + 0.1 * gamma * (centerloss_source + centerloss_target)
 		losses += loss.item()
 		mmdlosses += mmd_loss.item()
 		centerlosses_source += centerloss_source.item()
 		centerlosses_target += centerloss_target.item()
 		softmaxloss += softmax_loss.item()
-		l2losses += l2loss.item()
 		train_acc += correct.item()
 		loss.backward()
 		optimizer.step()
@@ -166,86 +157,17 @@ def train_ada(source_train_loader, target_train_loader, model, criterion, center
 	softmaxloss /= 1. * len(source_train_loader)  # avg softmax loss
 	centerlosses_source /= 1. * len(source_train_loader)
 	centerlosses_target /= 1. * len(source_train_loader)
-	l2losses /= 1. * len(source_train_loader)
 	train_acc /= 1. * len(source_train_loader.dataset)  # avg train_acc
 	print("training Epoch: {}, loss: {}, softmaxloss: {}, mmdloss: {}, "
-	      "centerloss_source: {}, centerloss_target: {}, l2loss: {}, train_acc: {}".format(epoch,
+	      "centerloss_source: {}, centerloss_target: {}, train_acc: {}".format(epoch,
 	                                                                           losses,softmaxloss,
 	                                                                           mmdlosses,
 	                                                                           centerlosses_source,
                                                                                centerlosses_target,
-                                                                                l2losses,
                                                                                train_acc))
 	
 	return losses, mmdlosses, softmaxloss, train_acc
 	
-
-def train_consistency_regu(source_train_loader, target_train_loader, model, criterion, optimizer, epoch, gamma=0.5, k=2):
-	'''
-	:param source_train_loader:
-	:param target_train_loader:
-	:param model:
-	:param criterion:
-	:param optimizer:
-	:param epoch:
-	:param gamma:
-	:param k:
-	:return:
-	'''
-	model.train()  # switch train mode
-	losses = 0  # init losses
-	softmaxloss = 0  # init softmax loss
-	l2_losses = 0  # inti target l2 loss
-	mmdlosses = 0  # init mmdlosses
-	train_acc = 0  # init train accuracy
-	iter_source = iter(source_train_loader)
-	iter_target = iter(target_train_loader)
-	
-	# iterate whole source data
-	for i in tqdm(range(1, len(source_train_loader))):
-		source_data, source_label = iter_source.next()
-		source_data = convert_batch_data(source_data)
-		source_label = convert_batch_label(source_label)
-		if i <= len(target_train_loader):
-			target_data, target_label = iter_target.next()
-			target_data = convert_batch_data(target_data)
-			target_label = convert_batch_label(target_label)
-		source_data, source_label, target_data, target_label = convert_tensor(source_data, source_label, target_data,
-		                                                                      target_label, device='cuda')
-		
-		source_feature, target_feature, source_cls, target_cls = model(source_data, target_data)
-		target_feature = target_feature.view(k, source_feature.size(0), -1)
-		target_feature = torch.mean(target_feature, 0)
-		optimizer.zero_grad()
-		mmd_loss = mmd_rbf_noaccelerate(source_feature, target_feature)
-		l2loss = consistency_loss(target_cls, k=k)
-		softmax_loss = criterion(source_cls, source_label)
-		correct = acc_cal(source_cls, source_label)
-		if epoch < 10:
-			loss = softmax_loss + gamma * mmd_loss
-		else:
-			loss = softmax_loss + gamma * mmd_loss + 5 * l2loss
-		losses += loss.item()
-		mmdlosses += mmd_loss.item()
-		softmaxloss += softmax_loss.item()
-		l2_losses += l2loss.item()
-		train_acc += correct
-		loss.backward()
-		optimizer.step()
-	
-	losses /= 1. * len(source_train_loader)  # avg loss
-	mmdlosses /= 1. * len(source_train_loader)  # avg mmdloss
-	softmaxloss /= 1. * len(source_train_loader)  # avg softmax loss
-	l2_losses /= 1. * len(source_train_loader)  # avg l2loss
-	train_acc /= 1. * len(source_train_loader.dataset)  # avg train_acc
-	print("training Epoch: {}, loss: {}, softmaxloss: {}, l2loss: {},  mmdloss: {}, train_acc: {}".format(epoch, losses,
-	                                                                                                      softmaxloss,
-	                                                                                                      l2_losses,
-	                                                                                                      mmdlosses,
-	                                                                                                      train_acc))
-	
-	return losses, softmaxloss, l2_losses, mmdlosses, train_acc
-
 
 def train_mixup(source_train_loader, target_train_loader, model, criterion, optimizer, epoch, gamma=0.5):
 	"""
@@ -362,13 +284,13 @@ def train_mixmatch(source_train_loader, target_train_loader, model, criterion, o
 		loss_func_x = mixup_criterion(datax_label_a, datax_label_b, lamx)
 		loss_func_u = mixup_criterion(convert_onehot(datau_label_a, 31), convert_onehot(datau_label_b, 31), lamu)
 		softmax_loss = loss_func_x(criterion, source_x_cls)
-		l2loss = loss_func_u(consistency_loss, source_u_cls)
+		# l2loss = loss_func_u(consistency_loss, source_u_cls)
 		correct = mixup_acc_cal(source_x_cls, datax_label_a, datax_label_b, lamx)
 		loss = softmax_loss + gamma * mmd_loss
 		losses += loss.item()
 		mmdlosses += mmd_loss.item()
 		softmaxloss += softmax_loss.item()
-		l2_losses += l2loss.item()
+		# l2_losses += l2loss.item()
 		train_acc += correct
 		loss.backward()
 		optimizer.step()
@@ -376,9 +298,9 @@ def train_mixmatch(source_train_loader, target_train_loader, model, criterion, o
 	losses /= 1. * len(source_train_loader)  # avg loss
 	mmdlosses /= 1. * len(source_train_loader)  # avg mmdloss
 	softmaxloss /= 1. * len(source_train_loader)  # avg softmax loss
-	l2_losses /= 1. * len(source_train_loader)  # avg l2loss
+	# l2_losses /= 1. * len(source_train_loader)  # avg l2loss
 	train_acc /= 1. * len(source_train_loader.dataset)  # avg train_acc
-	print("training Epoch: {}, loss: {}, softmaxloss: {}, l2loss: {},  mmdloss: {}, train_acc: {}".format(epoch, losses, softmaxloss, l2_losses, mmdlosses, train_acc))
+	print("training Epoch: {}, loss: {}, softmaxloss: {}, mmdloss: {}, train_acc: {}".format(epoch, losses, softmaxloss, mmdlosses, train_acc))
 	
 	return losses, softmaxloss, l2_losses, mmdlosses, train_acc
 
@@ -429,10 +351,10 @@ def main():
 	
 	if args.arch == "vgg16":
 		model = DANNet(arch="vgg16", num_class=num_class)
-		center_loss = CenterLoss(num_class, 128).to('cuda')
+		center_loss = CenterLoss(num_class, 2048).to('cuda')
 	elif args.arch == "resnet50":
 		model = DANNet(arch="resnet50", num_class=num_class)
-		center_loss = CenterLoss(num_class, 128).to('cuda')
+		center_loss = CenterLoss(num_class, 2048).to('cuda')
 	else:
 		raise ValueError("Unknown model architecture {}".format(args.arch))
 	
@@ -524,8 +446,8 @@ def main():
 			logging.info("l2_loss: {}".format(l2loss))
 		elif args.method == "consistency_regu":
 			losses, softmaxloss, l2loss,  mmdlosses, train_acc = train_consistency_regu(source_train_loader, target_train_loader, model, criterion, optimizer, epoch, gamma=gamma, k=args.k)
-		elif args.method == "train_ada":
-			losses, mmdlosses, softmaxloss, train_acc = train_ada(source_train_loader, target_train_loader, model, criterion, center_loss, optimizer, optimizer_centloss, epoch, gamma=gamma, k=2)
+		elif args.method == "train_center":
+			losses, mmdlosses, softmaxloss, train_acc = train_center(source_train_loader, target_train_loader, model, criterion, center_loss, optimizer, optimizer_centloss, epoch, gamma=gamma, k=args.k)
 		else:
 			raise ValueError("other tricks is under the todo list")
 	

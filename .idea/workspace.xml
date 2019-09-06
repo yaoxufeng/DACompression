@@ -131,10 +131,10 @@
       <method v="2" />
     </configuration>
     <list>
-      <item itemvalue="Python.datasets" />
       <item itemvalue="Python.loss" />
       <item itemvalue="Python.models" />
       <item itemvalue="Python.train" />
+      <item itemvalue="Python.datasets" />
     </list>
     <recent_temporary>
       <list>

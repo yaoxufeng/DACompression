@@ -106,7 +106,7 @@ def convert_onehot(x, num_class, use_cuda=True):
 
 
 # ========================= mix up  ==========================
-def mixup(x, y, alpha=1.0, use_cuda=True):
+def mixup(x, y, alpha=0.75, use_cuda=True):
 	'''
 	a classical data augmentation method for reducing inductive bias
 	@https://github.com/hongyi-zhang/mixup
