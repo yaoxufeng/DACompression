@@ -12,7 +12,7 @@ class DANNet(nn.Module):
 		self.arch = arch
 		self.num_class = num_class
 		if self.arch == "vgg16":
-			self.base_model = models.vgg16(pretrained=True)  # use vgg16 arch and pretrained params
+			self.base_model = models.vgg16_bn(pretrained=True)  # use vgg16 arch and pretrained params
 			self.base_model.classifier = nn.Sequential(*list(self.base_model.classifier.children())[:-3])  # drop the last fc layer
 			self.hidden_size = 4096
 			self.input_size = 224

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="WebServers">
+    <option name="servers">
+      <webServer id="d99ea766-4681-4556-a456-76f8928ff446" name="gammlab17" url="http://hk.gamma-cv.site">
+        <fileTransfer host="hk.gamma-cv.site" port="6017" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="6017" />
+        </fileTransfer>
+      </webServer>
+      <webServer id="2b045dae-d950-4de3-a4f9-4ecd405064d3" name="gammalab18" url="http://hk.gamma-cv.site">
+        <fileTransfer host="hk.gamma-cv.site" port="6018" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" passiveMode="true" shareSSLContext="true" />
+          </advancedOptions>
+          <option name="port" value="6018" />
+        </fileTransfer>
+      </webServer>
+    </option>
+  </component>
+</project>

@@ -16,6 +16,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision
+from torchvision import models
 import torch.optim as optim
 from torch.utils.data import DataLoader
 from tqdm import trange, tqdm
@@ -339,7 +340,22 @@ def save_checkpoint(state, is_best, filename="checkpoint.pth.tar"):
 	if is_best:
 		best_name = args.checkpoint_dir + 'best.pth.tar'
 		shutil.copyfile(filename, best_name)
-		
+
+
+def load_original(model, base):
+	pretrained_model = models.vgg16(pretrained=True)
+	model_dict = model.state_dict()
+	pretrained_model_dict = pretrained_model.state_dict()
+	for k, v in pretrained_model_dict.items():
+		model_dict[k] = pretrained_model_dict[k]
+	model.load_state_dict(model_dict)
+	if cuda:
+		model.cuda()
+	logging.info("Load original model done.")
+	_ = test(model)
+	
+	return model
+
 
 def main():
 	if args.dataset == "Office31":
@@ -464,11 +480,12 @@ def main():
 		logging.info("train_acc: {}".format(train_acc))
 
 		is_best = True
-		save_checkpoint({
-			'epoch': epoch + 1,
-			'arch': args.arch,
-			'state_dict': model.state_dict(),
-		}, is_best)
+		# save_checkpoint({
+		# 	'epoch': epoch + 1,
+		# 	'arch': args.arch,
+		# 	'state_dict': model.state_dict(),
+		# }, is_best)
+		torch.save(model.state_dict(), args.checkpoint_dir + "checkpoint.pth.tar")
 		if (epoch + 1) % args.eval_freq == 0 or epoch == args.num_epoch - 1:
 			acc, val_loss = validate(target_test_loader, model, criterion)
 			print("validation Epoch: {}, loss: {}, acc: {}".format(epoch+1, val_loss, acc))
